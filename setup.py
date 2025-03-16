@@ -7,12 +7,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="lmnn-metric-learning",
     version="0.1.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Youjia",
+    author_email="brianweng1114@gmail.com",
     description="Large Margin Nearest Neighbor (LMNN) Implementation",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/lmnn",
+    url="https://github.com/BrianWengAlreadyTaken/paper",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
