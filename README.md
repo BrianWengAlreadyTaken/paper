@@ -5,12 +5,14 @@ This repository contains a Python implementation of the Large Margin Nearest Nei
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone [your-repository-url]
 cd lmnn-project
 ```
 
 2. Create a virtual environment:
+
 ```bash
 # Windows
 python -m venv venv
@@ -22,6 +24,7 @@ source venv/bin/activate
 ```
 
 3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -84,6 +87,8 @@ lmnn-project/
 └── README.md         # Project documentation
 ```
 
+## Experiment Result
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -104,4 +109,4 @@ If you use this implementation in your research, please cite:
   pages={1473--1480},
   year={2006}
 }
-``` 
+```
