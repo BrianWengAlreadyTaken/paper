@@ -29,6 +29,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+4. Run evaluation:
+
+```python
+python -m src.eval
+```
+
 ## Usage
 
 Basic usage example:
@@ -70,24 +76,26 @@ The LMNN class accepts the following parameters:
 ## Project Structure
 
 ```
-lmnn-project/
-│
-├── src/               # Source code
+paper
+├── LICENSE
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+├── setup.py
+├── src
 │   ├── __init__.py
-│   └── lmnn.py
-│
-├── examples/          # Example scripts
-│   └── example.py
-│
-├── tests/             # Test files
+│   ├── data.py
+│   ├── drlmnn.py
+│   ├── eval.py
+│   ├── fblmnn.py
+│   ├── klmnn.py
+│   ├── lmnn.py
+│   ├── mmlmnn.py
+│   └── utils.py
+├── tests
 │   └── test_lmnn.py
-│
-├── requirements.txt   # Project dependencies
-├── setup.py          # Package setup file
-└── README.md         # Project documentation
+└── uv.lock
 ```
-
-## Experiment Result
 
 ## Contributing
 
