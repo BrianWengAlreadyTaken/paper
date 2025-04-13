@@ -1,14 +1,13 @@
 import numpy as np
-from sklearn.metrics.pairwise import euclidean_distances
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.metrics.pairwise import euclidean_distances
 from scipy.optimize import minimize
 import warnings
 
 
 class LMNN(BaseEstimator, TransformerMixin):
     """
-    Large Margin Nearest Neighbor (LMNN) Implementation
+    Large Margin Nearest Neighbor (LMNN) Implementation with Multi-Pass Support
 
     Parameters:
     -----------
@@ -17,11 +16,13 @@ class LMNN(BaseEstimator, TransformerMixin):
     regularization : float, default=0.5
         Regularization parameter for the optimization
     learning_rate : float, default=1e-7
-        Learning rate for the gradient descent
+        Learning rate for the gradient descent (used in initialization)
     max_iter : int, default=1000
-        Maximum number of iterations
+        Maximum number of iterations per pass
     tol : float, default=1e-5
-        Convergence tolerance
+        Convergence tolerance for optimization
+    passes : int, default=1
+        Number of passes over the data for optimization
 
     Attributes:
     -----------
@@ -30,23 +31,38 @@ class LMNN(BaseEstimator, TransformerMixin):
     """
 
     def __init__(
-        self, k=3, regularization=0.5, learning_rate=1e-7, max_iter=1000, tol=1e-5
+        self,
+        k=3,
+        regularization=0.5,
+        learning_rate=1e-7,
+        max_iter=1000,
+        tol=1e-5,
+        passes=1,
     ):
         self.k = k
         self.regularization = regularization
         self.learning_rate = learning_rate
         self.max_iter = max_iter
         self.tol = tol
+        self.passes = passes
 
-    def _find_target_neighbors(self, X, y):
-        """Find target neighbors (same class) for each instance."""
+    def _find_target_neighbors(self, X, y, L=None):
+        """Find target neighbors (same class) for each instance using current metric."""
         n_samples = X.shape[0]
         target_neighbors = []
+
+        # Transform X with current L if provided (for multi-pass updates)
+        if L is not None:
+            X_transformed = X.dot(L.T)
+        else:
+            X_transformed = X
 
         for i in range(n_samples):
             same_class = np.where(y == y[i])[0]
             same_class = same_class[same_class != i]
-            distances = euclidean_distances([X[i]], X[same_class]).ravel()
+            distances = euclidean_distances(
+                [X_transformed[i]], X_transformed[same_class]
+            ).ravel()
             target_neighbors.append(same_class[np.argsort(distances)[: self.k]])
 
         return np.array(target_neighbors)
@@ -56,14 +72,12 @@ class LMNN(BaseEstimator, TransformerMixin):
         n_samples, n_features = X.shape
         L = L_flat.reshape(n_features, n_features)
 
-        # Pull term - attract target neighbors
         pull_loss = 0
         for i in range(n_samples):
             for j in target_neighbors[i]:
                 diff = X[i] - X[j]
                 pull_loss += np.sum((diff.dot(L.T)) ** 2)
 
-        # Push term - repel imposters
         push_loss = 0
         margin = 1.0
         for i in range(n_samples):
@@ -71,13 +85,11 @@ class LMNN(BaseEstimator, TransformerMixin):
                 diff_ij = X[i] - X[j]
                 dist_ij = np.sum((diff_ij.dot(L.T)) ** 2)
 
-                # Find imposters
                 different_class = y != y[i]
                 for l in np.where(different_class)[0]:
                     diff_il = X[i] - X[l]
                     dist_il = np.sum((diff_il.dot(L.T)) ** 2)
 
-                    # Compute hinge loss
                     push_loss += max(0, margin + dist_ij - dist_il)
 
         return pull_loss + self.regularization * push_loss
@@ -118,36 +130,33 @@ class LMNN(BaseEstimator, TransformerMixin):
 
         return gradient.ravel()
 
-    def fit(self, X, y, mode="single", outer_iter=5):
+    def fit(self, X, y):
         """
-        Fit the LMNN model.
+        Fit the LMNN model with multiple passes
 
         Parameters:
         -----------
         X : array-like, shape (n_samples, n_features)
-            Training data.
+            Training data
         y : array-like, shape (n_samples,)
-            Target values.
-        mode : str, default='single'
-            'single' for single-pass LMNN, 'multi' for multipass LMNN.
-        outer_iter : int, default=5
-            Number of outer iterations for multipass LMNN.
+            Target values
 
         Returns:
         --------
         self : object
-            Returns self.
+            Returns self
         """
         X = np.asarray(X)
         y = np.asarray(y)
+
         n_samples, n_features = X.shape
 
-        # Initialize L as identity matrix
+        # Initialize L as identity matrix for the first pass
         L_current = np.eye(n_features)
 
-        if mode == "single":
-            # Single-pass: compute target neighbors once
-            target_neighbors = self._find_target_neighbors(X, y)
+        for pass_idx in range(self.passes):
+            target_neighbors = self._find_target_neighbors(X, y, L=L_current)
+
             result = minimize(
                 fun=self._compute_loss,
                 x0=L_current.ravel(),
@@ -156,31 +165,15 @@ class LMNN(BaseEstimator, TransformerMixin):
                 jac=self._compute_gradient,
                 options={"maxiter": self.max_iter, "ftol": self.tol},
             )
+
             if not result.success:
-                warnings.warn(f"LMNN optimization did not converge: {result.message}")
-            self.L_ = result.x.reshape(n_features, n_features)
-
-        elif mode == "multi":
-            # Multipass: update neighbors periodically
-            for outer in range(outer_iter):
-                # Recompute target neighbors based on the current L
-                target_neighbors = self._find_target_neighbors(X.dot(L_current.T), y)
-                # Optimize for a limited number of iterations
-                result = minimize(
-                    fun=self._compute_loss,
-                    x0=L_current.ravel(),
-                    args=(X, y, target_neighbors),
-                    method="L-BFGS-B",
-                    jac=self._compute_gradient,
-                    options={"maxiter": self.max_iter // outer_iter, "ftol": self.tol},
+                warnings.warn(
+                    f"LMNN optimization did not converge in pass {pass_idx + 1}: {result.message}"
                 )
-                if not result.success:
-                    warnings.warn(
-                        f"LMNN optimization did not converge at outer iteration {outer}: {result.message}"
-                    )
-                L_current = result.x.reshape(n_features, n_features)
-            self.L_ = L_current
 
+            L_current = result.x.reshape(n_features, n_features)
+
+        self.L_ = L_current
         return self
 
     def transform(self, X):
